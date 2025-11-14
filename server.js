@@ -1,39 +1,32 @@
-// server.js (Final Version)
+// server.js (Final Corrected Version)
 
-const { WebSocketServer } = require('ws');
+const { WebSocketServer, WebSocket } = require('ws'); // <-- NOTICE: We are now importing WebSocket too
 const http = require('http');
 
 // 1. Create a basic HTTP server for health checks.
 const server = http.createServer((req, res) => {
-  // This is our health check endpoint for Render.
   if (req.url === '/health' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok' }));
     return;
   }
-
-  // For any other normal HTTP request, respond with a simple message.
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('WebSocket server is running.');
 });
 
-// 2. Create the WebSocket server, but tell it we will handle upgrades manually.
+// 2. Create the WebSocket server.
 const wss = new WebSocketServer({ noServer: true });
 
 const rooms = {};
 
-// 3. This is the critical part: Listen for the HTTP server's 'upgrade' event.
+// 3. Listen for the HTTP server's 'upgrade' event.
 server.on('upgrade', (request, socket, head) => {
-  // This event is only triggered when a client asks to switch to WebSockets.
-  // We let the 'ws' library handle the handshake.
   wss.handleUpgrade(request, socket, head, (ws) => {
-    // If the handshake is successful, the 'ws' library gives us a client socket.
-    // We then emit our own 'connection' event to trigger our game logic.
     wss.emit('connection', ws, request);
   });
 });
 
-// 4. All of your existing game logic now attaches to the 'connection' event as before.
+// 4. Game logic.
 wss.on('connection', (ws) => {
     console.log('Client connected via WebSocket');
     ws.roomCode = null;
@@ -58,8 +51,10 @@ wss.on('connection', (ws) => {
                     room.client = ws;
                     room.clientName = name;
                     
-                    room.host.send(JSON.stringify({ type: 'opponent_joined', payload: { opponentName: room.clientName } }));
-                    room.client.send(JSON.stringify({ type: 'join_success', payload: { opponentName: room.hostName } }));
+                    if (room.host && room.host.readyState === WebSocket.OPEN) { // Check if host is still connected
+                        room.host.send(JSON.stringify({ type: 'opponent_joined', payload: { opponentName: room.clientName } }));
+                    }
+                    ws.send(JSON.stringify({ type: 'join_success', payload: { opponentName: room.hostName } }));
                     console.log(`${name} joined room ${roomCode}`);
                 } else {
                     ws.send(JSON.stringify({ type: 'error', payload: { message: 'Room not found or is full.' } }));
@@ -84,6 +79,7 @@ wss.on('connection', (ws) => {
         const room = rooms[ws.roomCode];
         if (room) {
             const opponent = (ws === room.host) ? room.client : room.host;
+            // THIS IS THE FIX: Use WebSocket.OPEN from the 'ws' library
             if (opponent && opponent.readyState === WebSocket.OPEN) {
                 opponent.send(JSON.stringify({ type: 'opponent_disconnected' }));
             }
@@ -93,7 +89,7 @@ wss.on('connection', (ws) => {
     });
 });
 
-// 5. Start the HTTP server (which now also handles WebSocket upgrades).
+// 5. Start the server.
 const port = process.env.PORT || 8080;
 server.listen(port, () => {
   console.log(`HTTP/WebSocket server listening on port ${port}`);
