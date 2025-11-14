@@ -81,7 +81,7 @@ wss.on('connection', (ws) => {
                 const room = rooms[ws.roomCode];
                 if (room) {
                     const opponent = (ws === room.host) ? room.client : room.host;
-                    if (opponent && opponent.readyState === WebSocket.OPEN) {
+                    if (opponent && opponent.readyState === 1) { // 1 = OPEN
                         opponent.send(JSON.stringify({ type: 'game_event', payload: payload }));
                     }
                 }
@@ -91,7 +91,7 @@ wss.on('connection', (ws) => {
                 const room = rooms[ws.roomCode];
                 if (room) {
                     const opponent = (ws === room.host) ? room.client : room.host;
-                    if (opponent && opponent.readyState === WebSocket.OPEN) {
+                    if (opponent && opponent.readyState === 1) { // 1 = OPEN
                         opponent.send(JSON.stringify({ type: 'game_reset' }));
                     }
                 }
@@ -106,7 +106,7 @@ wss.on('connection', (ws) => {
         const room = rooms[ws.roomCode];
         if (room) {
             const opponent = (ws === room.host) ? room.client : room.host;
-            if (opponent && opponent.readyState === WebSocket.OPEN) {
+            if (opponent && opponent.readyState === 1) { // 1 = OPEN
                 opponent.send(JSON.stringify({ type: 'opponent_disconnected' }));
             }
             delete rooms[ws.roomCode];
