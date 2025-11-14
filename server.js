@@ -1,24 +1,41 @@
-const { WebSocketServer, WebSocket } = require('ws');
+// server.js (Final Version)
 
-// Render provides the PORT environment variable.
-const port = process.env.PORT || 8080;
-const wss = new WebSocketServer({ port });
+const { WebSocketServer } = require('ws');
+const http = require('http');
 
-const rooms = {}; // Store game rooms
+// 1. Create a basic HTTP server for health checks.
+const server = http.createServer((req, res) => {
+  // This is our health check endpoint for Render.
+  if (req.url === '/health' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok' }));
+    return;
+  }
 
-console.log(`WebSocket relay server started on port ${port}...`);
+  // For any other normal HTTP request, respond with a simple message.
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('WebSocket server is running.');
+});
 
-function generateRoomCode() {
-    let code = '';
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    for (let i = 0; i < 4; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return rooms[code] ? generateRoomCode() : code;
-}
+// 2. Create the WebSocket server, but tell it we will handle upgrades manually.
+const wss = new WebSocketServer({ noServer: true });
 
+const rooms = {};
+
+// 3. This is the critical part: Listen for the HTTP server's 'upgrade' event.
+server.on('upgrade', (request, socket, head) => {
+  // This event is only triggered when a client asks to switch to WebSockets.
+  // We let the 'ws' library handle the handshake.
+  wss.handleUpgrade(request, socket, head, (ws) => {
+    // If the handshake is successful, the 'ws' library gives us a client socket.
+    // We then emit our own 'connection' event to trigger our game logic.
+    wss.emit('connection', ws, request);
+  });
+});
+
+// 4. All of your existing game logic now attaches to the 'connection' event as before.
 wss.on('connection', (ws) => {
-    console.log('Client connected');
+    console.log('Client connected via WebSocket');
     ws.roomCode = null;
 
     ws.on('message', (message) => {
@@ -75,3 +92,18 @@ wss.on('connection', (ws) => {
         }
     });
 });
+
+// 5. Start the HTTP server (which now also handles WebSocket upgrades).
+const port = process.env.PORT || 8080;
+server.listen(port, () => {
+  console.log(`HTTP/WebSocket server listening on port ${port}`);
+});
+
+function generateRoomCode() {
+    let code = '';
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    for (let i = 0; i < 4; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return rooms[code] ? generateRoomCode() : code;
+}
