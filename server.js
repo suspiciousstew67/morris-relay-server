@@ -82,7 +82,23 @@ wss.on('connection', (ws) => {
                 if (room) {
                     const opponent = (ws === room.host) ? room.client : room.host;
                     if (opponent && opponent.readyState === 1) { // 1 = OPEN
-                        opponent.send(JSON.stringify({ type: 'game_event', payload: payload }));
+                        // Preserve messageId if present for acknowledgment system
+                        const forwardedMessage = { type: 'game_event', payload: payload };
+                        if (data.messageId !== undefined) {
+                            forwardedMessage.messageId = data.messageId;
+                        }
+                        opponent.send(JSON.stringify(forwardedMessage));
+                    }
+                }
+            }
+            else if (type === 'ack') {
+                // Forward acknowledgment back to the sender of the original message
+                const room = rooms[ws.roomCode];
+                if (room) {
+                    const opponent = (ws === room.host) ? room.client : room.host;
+                    if (opponent && opponent.readyState === 1) { // 1 = OPEN
+                        // Forward the ack message with messageId
+                        opponent.send(JSON.stringify({ type: 'ack', messageId: data.messageId }));
                     }
                 }
             }
